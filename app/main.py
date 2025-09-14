@@ -7,7 +7,7 @@ app = FastAPI()
 app = FastAPI(title="Media Buying Management System")
 
 # Register routers
-app.include_router(clients.router)
+app.include_router(clients.router, prefix="/api/v1")
 
 @app.get("/")
 def home():
