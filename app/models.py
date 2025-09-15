@@ -4,11 +4,28 @@ from datetime import datetime
 from bson import ObjectId
 from uuid import UUID, uuid4
 
+# ------------------ Users ------------------
+class User(BaseModel):
+    id: UUID = Field(default_factory=uuid4, alias="_id")
+    # client_id: Optional[UUID]
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    role: str  # admin, manager, analyst, etc.
+    permissions: Optional[List[str]] = []
+    status: str  # active, suspended, pending
+    last_login: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 # ------------------ Clients ------------------
 class Client(BaseModel):
-    # id: UUID = Field(default_factory=uuid4)
-    id: UUID = Field(default_factory=uuid4, alias="_id")  #
+    id: UUID = Field(default_factory=uuid4, alias="_id")
     name: str
     industry: str
     created_date: datetime = Field(default_factory=datetime.utcnow)
@@ -21,7 +38,7 @@ class Client(BaseModel):
 
 # ------------------ SKUs ------------------
 class SKU(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = Field(default_factory=uuid4, alias="_id")
     client_id: str
     name: str
     category: str
@@ -37,7 +54,7 @@ class SKU(BaseModel):
 
 # ------------------ Campaigns ------------------
 class Campaign(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = Field(default_factory=uuid4, alias="_id")
     sku_id: str
     client_id: str
     platform: str  # google, meta, tiktok
@@ -55,7 +72,7 @@ class Campaign(BaseModel):
 
 # ------------------ Performance Metrics ------------------
 class PerformanceMetric(BaseModel):
-    id:UUID = Field(default_factory=uuid4)
+    id: UUID = Field(default_factory=uuid4, alias="_id")
     campaign_id: str
     sku_id: str
     client_id: str
@@ -76,7 +93,7 @@ class PerformanceMetric(BaseModel):
 
 # ------------------ Intelligence Decisions ------------------
 class IntelligenceDecision(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = Field(default_factory=uuid4, alias="_id")
     sku_id: str
     client_id: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -94,7 +111,7 @@ class IntelligenceDecision(BaseModel):
 
 # ------------------ System Benchmarks ------------------
 class SystemBenchmark(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
+    id: UUID = Field(default_factory=uuid4, alias="_id")
     industry_category: str
     platform: str
     metric_type: str
