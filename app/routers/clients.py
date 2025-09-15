@@ -1,21 +1,26 @@
 from fastapi import APIRouter, HTTPException
 from app.models import Client
-from app.database import db
+from app.db.connection import db
+from app.services import client_service
+from app.schemas.clients_schema import ClientCreateResponse,ClientFetchResponse
 
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
-@router.post("/", response_model=Client)
+@router.post("/", response_model=ClientCreateResponse)
 async def create_client(client: Client):
-    client_dict = client.dict(by_alias=True)  # keep `_id`
-    client_dict["_id"] = str(client_dict["_id"])  # force UUID -> string
+    result = await client_service.create_client_service(client)
+    if result.get("success"):
+        return {
+                 "message": result["message"],
+                 "client_id": result["client_id"]
+               }
+    else:
+        raise HTTPException(status_code=400, detail=f"Error creating client: {result['message']}")
 
-    await db["clients"].insert_one(client_dict)
-    return client
-
-@router.get("/{client_id}", response_model=Client)
+@router.get("/{client_id}", response_model=ClientFetchResponse)
 async def get_client(client_id: str):
-    client = await db["clients"].find_one({"_id": client_id})
+    client = await client_service.get_client_by_id_service(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    return Client(**client)
+    return {"message":"Client retrieved successfully","data":client}
