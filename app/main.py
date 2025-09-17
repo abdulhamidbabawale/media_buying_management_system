@@ -5,6 +5,9 @@ from fastapi_limiter.depends import RateLimiter
 import redis.asyncio as redis
 import uvicorn
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Media Buying Management System",dependencies=[Depends(RateLimiter(times=100, seconds=60))])
 
@@ -26,7 +29,8 @@ async def shutdown():
 
 @app.get("/")
 def home():
-    return {"message": "API is running 🚀"}
+    env= os.getenv("ENVIRONMENT")
+    return {"message": f"API is running 🚀 this is {env} environment"}
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check():
