@@ -5,8 +5,8 @@ load_dotenv()
 
 
 class Settings:
-    MONGODB_URI: str = os.getenv("Database_URI")
-    DB_NAME: str = os.getenv("DB_name")
+    MONGODB_URI: str = os.getenv("DATABASE_URI")
+    DB_NAME: str = os.getenv("DB_NAME")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecret")
     DEBUG: bool = os.getenv("DEBUG", "True") == "True"
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY")
