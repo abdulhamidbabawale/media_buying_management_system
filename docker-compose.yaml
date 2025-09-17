@@ -1,0 +1,27 @@
+version: '3'
+
+services:
+  app:
+    build: .
+    container_name: media_buying_management_system_app
+    command: sh -c "uvicorn app.main:app --port 8000 --host 0.0.0.0"
+    ports:
+      - 8000:8000
+    depends_on:
+      - redis
+    environment:
+      - Database_URI=${Database_URI}
+      - REDIS_URL=redis://redis:6379/0
+      - DB_name=${DB_name}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
+
+  redis:
+     image: redis:7-alpine
+     container_name: media_buying_management_system_redis
+     ports:
+       - 6379:6379
