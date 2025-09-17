@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.models import Client
 from app.services import client_service
-from app.schemas.clients_schema import ClientCreateResponse,ClientFetchResponse,ClientUpdateRequest
+from app.schemas.clients_schema import ClientCreateResponse,ClientFetchResponse
 
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
