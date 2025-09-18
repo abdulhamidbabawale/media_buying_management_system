@@ -24,7 +24,7 @@ async def startup():
 
     if env == "production":
         # inside Docker / Cloud Run
-        redis_host = os.getenv("REDIS_HOST", "redis")
+        redis_host = os.getenv("REDIS_HOST")
         redis_port = 6379
     else:
          # local dev
