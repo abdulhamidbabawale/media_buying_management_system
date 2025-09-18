@@ -11,7 +11,7 @@ load_dotenv()
 
 app = FastAPI(title="Media Buying Management System",dependencies=[Depends(RateLimiter(times=100, seconds=60))])
 
-env= os.getenv("ENVIRONMENT")
+env= os.getenv("ENVIRONMENT", "development")
 
 # Register routers
 app.include_router(clients.router, prefix="/api/v1")
@@ -22,8 +22,16 @@ app.include_router(skus.router, prefix="/api/v1")
 async def startup():
     # Connect to Redis
 
-    redis_url = os.environ.get("REDIS_URL", "redis://redis:6379")
-    r = redis.from_url(redis_url, encoding="utf8", decode_responses=True)
+    if env == "production":
+        # inside Docker / Cloud Run
+        redis_host = "redis"
+        redis_port = 6379
+    else:
+         # local dev
+         redis_host = os.getenv("REDIS_HOST", "localhost")
+         redis_port = int(os.getenv("REDIS_PORT", 6379))
+
+         r = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
     await FastAPILimiter.init(r)
 
 @app.on_event("shutdown")
