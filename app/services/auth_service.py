@@ -1,6 +1,6 @@
 from app.db.auth_queries import get_user_by_email, create_user
 # from app.core.security import hash_password
-from app.jwt import hash_password, verify_password, create_access_token
+from app.jwt import hash_password, verify_password, create_access_token, create_refresh_token, verify_token_type, decode_access_token
 from app.schemas.auth_schema import LoginRequest
 from app.models import User
 from fastapi.encoders import jsonable_encoder
@@ -23,6 +23,38 @@ async def login_user(form_data: LoginRequest):
     if not user or not verify_password(form_data.password, user["password"]):
         return {"success": False, "message": "Invalid credentials"}
 
-    token = create_access_token({"sub": user["email"]})
-    return {"success": True, "access_token": token, "token_type": "bearer"}
+    access_token = create_access_token({"sub": user["email"], "user_id": str(user["_id"])})
+    refresh_token = create_refresh_token({"sub": user["email"], "user_id": str(user["_id"])})
+    
+    return {
+        "success": True, 
+        "access_token": access_token, 
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+async def refresh_access_token(refresh_token: str):
+    """Refresh access token using valid refresh token"""
+    try:
+        # Verify refresh token is valid and of correct type
+        if not verify_token_type(refresh_token, "refresh"):
+            return {"success": False, "message": "Invalid refresh token"}
+        
+        # Decode token to get user info
+        payload = decode_access_token(refresh_token)
+        if not payload:
+            return {"success": False, "message": "Invalid refresh token"}
+        
+        # Create new access token
+        new_access_token = create_access_token({
+            "sub": payload["sub"], 
+            "user_id": payload["user_id"]
+        })
+        
+        return {
+            "success": True,
+            "access_token": new_access_token
+        }
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
