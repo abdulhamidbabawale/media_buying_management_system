@@ -21,19 +21,17 @@ app.include_router(skus.router, prefix="/api/v1")
 @app.on_event("startup")
 async def startup():
     # Connect to Redis
-    r=None
 
     if env == "production":
         # inside Docker / Cloud Run
         redis_host = "redis"
         redis_port = 6379
-        r = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
     else:
          # local dev
          redis_host = os.getenv("REDIS_HOST", "localhost")
          redis_port = int(os.getenv("REDIS_PORT", 6379))
 
-         r = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
+    r = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
     await FastAPILimiter.init(r)
 
 @app.on_event("shutdown")
