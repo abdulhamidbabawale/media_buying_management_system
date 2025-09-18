@@ -21,6 +21,7 @@ app.include_router(skus.router, prefix="/api/v1")
 @app.on_event("startup")
 async def startup():
     # Connect to Redis
+    r=None
 
     if env == "production":
         # inside Docker / Cloud Run
