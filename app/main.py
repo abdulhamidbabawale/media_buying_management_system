@@ -1,15 +1,20 @@
 from fastapi import FastAPI,Depends,status
-from app.routers import clients,auth,skus
+from app.routers import clients,auth,skus,campaigns,metrics,integrations
+from app.middleware import MultiTenantMiddleware
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
 import redis.asyncio as redis
 import uvicorn
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = FastAPI(title="Media Buying Management System",dependencies=[Depends(RateLimiter(times=100, seconds=60))])
+
+# Add multi-tenant middleware
+app.add_middleware(MultiTenantMiddleware)
 
 env= os.getenv("ENVIRONMENT", "development")
 
@@ -17,6 +22,9 @@ env= os.getenv("ENVIRONMENT", "development")
 app.include_router(clients.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(skus.router, prefix="/api/v1")
+app.include_router(campaigns.router, prefix="/api/v1")
+app.include_router(metrics.router, prefix="/api/v1")
+app.include_router(integrations.router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def startup():
@@ -39,14 +47,33 @@ async def shutdown():
     await FastAPILimiter.close()
 
 @app.get("/")
-def home():
-    # env= os.getenv("ENVIRONMENT")
-    return {"message": f"API is running 🚀 this is {env} environment"}
+async def root():
+    return {"message": f"Media Buying Management System API is running 🚀 - {env} environment"}
 
-@app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/api/v1/health")
 async def health_check():
-    """
-    Simple health check endpoint.
-    Returns OK if the API is running.
-    """
-    return {"status": "ok", "message": "API is healthy 🚀"}
+    """Health check endpoint for monitoring"""
+    try:
+        # Test database connection
+        from app.db.connection import db
+        await db.command("ping")
+        db_status = "healthy"
+    except Exception:
+        db_status = "unhealthy"
+    
+    try:
+        # Test Redis connection
+        import redis.asyncio as redis
+        r = redis.Redis(host=os.getenv("REDIS_HOST", "localhost"), port=int(os.getenv("REDIS_PORT", 6379)), db=0, decode_responses=True)
+        await r.ping()
+        redis_status = "healthy"
+    except Exception:
+        redis_status = "unhealthy"
+    
+    return {
+        "status": "healthy" if db_status == "healthy" and redis_status == "healthy" else "unhealthy",
+        "database": db_status,
+        "redis": redis_status,
+        "timestamp": datetime.now().isoformat()
+    }
+
