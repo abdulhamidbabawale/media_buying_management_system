@@ -9,26 +9,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="Media Buying Management System",dependencies=[Depends(RateLimiter(times=100, seconds=60))])
+app = FastAPI(title="Media Buying Management System")
+
+env= os.getenv("ENVIRONMENT")
 
 # Register routers
 app.include_router(clients.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(skus.router, prefix="/api/v1")
 
-@app.on_event("startup")
-async def startup():
-    # Connect to Redis
-    r = redis.from_url("redis://localhost:6379", encoding="utf-8", decode_responses=True)
-    await FastAPILimiter.init(r)
 
-@app.on_event("shutdown")
-async def shutdown():
-    await FastAPILimiter.close()
 
 @app.get("/")
 def home():
-    env= os.getenv("ENVIRONMENT")
+    # env= os.getenv("ENVIRONMENT")
     return {"message": f"API is running 🚀 this is {env} environment"}
 
 @app.get("/health", status_code=status.HTTP_200_OK)
