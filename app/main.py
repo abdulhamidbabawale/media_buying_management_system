@@ -1,6 +1,6 @@
 from fastapi import FastAPI,Depends,status
 from app.routers import clients,auth,skus,campaigns,metrics,integrations
-from app.middleware import MultiTenantMiddleware
+from app.middleware import MultiTenantMiddleware, LoggingMiddleware
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
 import redis.asyncio as redis
@@ -13,7 +13,8 @@ load_dotenv()
 
 app = FastAPI(title="Media Buying Management System",dependencies=[Depends(RateLimiter(times=100, seconds=60))])
 
-# Add multi-tenant middleware
+# Add logging and multi-tenant middleware (order: logging outermost)
+app.add_middleware(LoggingMiddleware)
 app.add_middleware(MultiTenantMiddleware)
 
 env= os.getenv("ENVIRONMENT", "development")
