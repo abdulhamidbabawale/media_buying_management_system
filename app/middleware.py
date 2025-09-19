@@ -39,6 +39,37 @@ class MultiTenantMiddleware:
         
         await self.app(scope, receive, send)
     
+class LoggingMiddleware:
+    def __init__(self, app):
+        self.app = app
+        self.logger = logging.getLogger("request")
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        client = scope.get("client") or (None, None)
+        client_ip = client[0] if client else "-"
+        path = scope.get("path")
+        method = scope.get("method")
+
+        self.logger.info(f"request start method={method} path={path} ip={client_ip}")
+
+        async def send_wrapper(message):
+            if message.get("type") == "http.response.start":
+                status_code = message.get("status")
+                self.logger.info(f"request end method={method} path={path} status={status_code}")
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception as e:
+            self.logger.exception(f"unhandled error method={method} path={path} error={e}")
+            response = JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+            await response(scope, receive, send)
+
     async def _extract_client_id(self, request: Request) -> Optional[str]:
         """Extract client_id from JWT token or request headers"""
         
