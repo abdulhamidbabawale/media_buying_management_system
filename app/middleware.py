@@ -1,4 +1,5 @@
 from fastapi import Request, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from app.jwt import decode_access_token, verify_token_type
@@ -31,8 +32,8 @@ class MultiTenantMiddleware:
                     # Add client_id to request state for use in endpoints
                     request.state.client_id = client_id
             except HTTPException as e:
-                # If client validation fails, return error
-                response = HTTPException(status_code=e.status_code, detail=e.detail)
+                # If client validation fails, return proper JSON response
+                response = JSONResponse({"detail": e.detail}, status_code=e.status_code)
                 await response(scope, receive, send)
                 return
         
