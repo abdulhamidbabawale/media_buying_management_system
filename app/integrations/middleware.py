@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from app.integrations.google_ads import GoogleAdsConnector
 from app.integrations.meta_ads import MetaAdsConnector
 from app.integrations.base import AdPlatform, IntegrationError, RateLimitError, AuthenticationError
+from app.services.integration_metrics_service import integration_metrics_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -116,13 +117,34 @@ class IntegrationMiddleware:
                     "message": "No performance data available from any source"
                 }
             
-            # Aggregate metrics
+            # Persist raw and aggregate normalized metrics per source
             for source_name, data in all_data_sources:
                 aggregated_data["sources"].append(source_name)
-                aggregated_data["total_spend"] += data.get("spend", 0.0)
-                aggregated_data["total_impressions"] += data.get("impressions", 0)
-                aggregated_data["total_clicks"] += data.get("clicks", 0)
-                aggregated_data["total_conversions"] += data.get("conversions", 0)
+                vendor = source_name  # 'integrator' or 'platform'
+                # Save raw snapshot
+                await integration_metrics_service.save_raw(
+                    vendor=vendor,
+                    campaign_id=campaign_id,
+                    platform=platform,
+                    account_id=account_id,
+                    payload=data,
+                    date_range=date_range,
+                )
+                # Normalize and persist
+                normalized = integration_metrics_service.normalize_payload(
+                    vendor=vendor,
+                    payload=data,
+                    campaign_id=campaign_id,
+                    platform=platform,
+                    account_id=account_id,
+                    date_range=date_range,
+                )
+                await integration_metrics_service.save_normalized(normalized)
+                # Use normalized values for aggregation
+                aggregated_data["total_spend"] += normalized.spend
+                aggregated_data["total_impressions"] += normalized.impressions
+                aggregated_data["total_clicks"] += normalized.clicks
+                aggregated_data["total_conversions"] += normalized.conversions
             
             # Calculate data quality score
             aggregated_data["data_quality_score"] = self._calculate_data_quality_score(all_data_sources)
@@ -248,7 +270,14 @@ class IntegrationMiddleware:
         
         try:
             platform_connector = self.platforms[platform]
-            success = await platform_connector.update_campaign_budget(campaign_id, new_budget)
+            # basic retry/backoff
+            attempts = 0
+            while attempts < 3:
+                success = await platform_connector.update_campaign_budget(campaign_id, new_budget)
+                if success:
+                    break
+                await asyncio.sleep((attempts + 1) * 0.5)
+                attempts += 1
             
             if success:
                 return {
@@ -290,7 +319,14 @@ class IntegrationMiddleware:
         
         try:
             platform_connector = self.platforms[platform]
-            data = await platform_connector.get_performance_metrics(campaign_id, date_range)
+            attempts = 0
+            data = None
+            while attempts < 3 and not data:
+                data = await platform_connector.get_performance_metrics(campaign_id, date_range)
+                if data:
+                    break
+                await asyncio.sleep((attempts + 1) * 0.5)
+                attempts += 1
             return data
         except Exception as e:
             logger.warning(f"Platform {platform} data collection failed: {e}")

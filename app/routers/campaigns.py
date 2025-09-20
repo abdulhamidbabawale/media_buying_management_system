@@ -17,7 +17,7 @@ async def create_campaign(
 ):
     """Create a new campaign"""
     # Verify client access
-    await verify_client_access(client_id, campaign.client_id)
+    await verify_client_access(client_id, campaign.client_id, request)
     
     # Create campaign model
     campaign_model = Campaign(
@@ -67,7 +67,7 @@ async def get_campaign(
         raise HTTPException(status_code=404, detail="Campaign not found")
     
     # Verify client access
-    await verify_client_access(client_id, campaign["client_id"])
+    await verify_client_access(client_id, campaign["client_id"], request)
     
     return {
         "message": "Campaign retrieved successfully",
@@ -87,7 +87,7 @@ async def update_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"])
+    await verify_client_access(client_id, existing_campaign["client_id"], request)
     
     # Create updated campaign model
     campaign_model = Campaign(
@@ -122,7 +122,7 @@ async def delete_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"])
+    await verify_client_access(client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.delete_campaign_service(campaign_id)
     if result.get("success"):
@@ -144,7 +144,7 @@ async def pause_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"])
+    await verify_client_access(client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.pause_campaign_service(campaign_id)
     if result.get("success"):
@@ -166,7 +166,7 @@ async def activate_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"])
+    await verify_client_access(client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.activate_campaign_service(campaign_id)
     if result.get("success"):
@@ -189,7 +189,7 @@ async def update_campaign_budget(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"])
+    await verify_client_access(client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.update_campaign_budget_service(campaign_id, budget_update.new_budget)
     if result.get("success"):

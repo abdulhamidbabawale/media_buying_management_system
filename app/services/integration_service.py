@@ -6,6 +6,15 @@ from datetime import datetime, timedelta
 from app.integrations.middleware import integration_middleware
 from app.integrations.google_ads import GoogleAdsConnector
 from app.integrations.meta_ads import MetaAdsConnector
+from app.integrations.tiktok_ads import TikTokAdsConnector
+from app.integrations.linkedin_ads import LinkedInAdsConnector
+from app.integrations.integrators import (
+    RevealBotConnector,
+    AdRollConnector,
+    StackAdaptConnector,
+    AdEspressoConnector,
+    MadgicxConnector,
+)
 from app.integrations.base import AdPlatform
 import logging
 
@@ -47,6 +56,26 @@ class IntegrationService:
                 else:
                     results["meta_ads"] = {"success": False, "message": "Invalid Meta Ads credentials"}
             
+            # TikTok
+            if "tiktok_ads" in client_credentials:
+                tiktok_creds = client_credentials["tiktok_ads"]
+                tiktok_connector = TikTokAdsConnector(tiktok_creds)
+                if await tiktok_connector.validate_credentials():
+                    self.middleware.register_platform("tiktok_ads", tiktok_connector)
+                    results["tiktok_ads"] = {"success": True, "message": "TikTok Ads connected"}
+                else:
+                    results["tiktok_ads"] = {"success": False, "message": "Invalid TikTok Ads credentials"}
+
+            # LinkedIn
+            if "linkedin_ads" in client_credentials:
+                li_creds = client_credentials["linkedin_ads"]
+                li_connector = LinkedInAdsConnector(li_creds)
+                if await li_connector.validate_credentials():
+                    self.middleware.register_platform("linkedin_ads", li_connector)
+                    results["linkedin_ads"] = {"success": True, "message": "LinkedIn Ads connected"}
+                else:
+                    results["linkedin_ads"] = {"success": False, "message": "Invalid LinkedIn Ads credentials"}
+
             self.initialized = True
             return {
                 "success": True,
@@ -165,6 +194,39 @@ class IntegrationService:
     async def get_available_integrators(self) -> List[str]:
         """Get list of available integrators"""
         return list(self.middleware.integrators.keys())
+
+    async def initialize_integrators(self, integrator_credentials: Dict[str, Dict]) -> Dict:
+        """Initialize media buying integrators"""
+        results = {}
+        try:
+            if "revealbot" in integrator_credentials:
+                rb = RevealBotConnector(integrator_credentials["revealbot"])
+                self.middleware.register_integrator("revealbot", rb)
+                results["revealbot"] = {"success": True}
+
+            if "adroll" in integrator_credentials:
+                ar = AdRollConnector(integrator_credentials["adroll"])
+                self.middleware.register_integrator("adroll", ar)
+                results["adroll"] = {"success": True}
+
+            if "stackadapt" in integrator_credentials:
+                sa = StackAdaptConnector(integrator_credentials["stackadapt"])
+                self.middleware.register_integrator("stackadapt", sa)
+                results["stackadapt"] = {"success": True}
+
+            if "adespresso" in integrator_credentials:
+                ae = AdEspressoConnector(integrator_credentials["adespresso"])
+                self.middleware.register_integrator("adespresso", ae)
+                results["adespresso"] = {"success": True}
+
+            if "madgicx" in integrator_credentials:
+                mg = MadgicxConnector(integrator_credentials["madgicx"])
+                self.middleware.register_integrator("madgicx", mg)
+                results["madgicx"] = {"success": True}
+
+            return {"success": True, "results": results}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
     
     async def validate_platform_credentials(self, platform: str, credentials: Dict) -> Dict:
         """Validate platform credentials"""
