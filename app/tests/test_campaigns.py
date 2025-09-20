@@ -1,5 +1,5 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.models import Campaign
 from app.services.campaign_service import create_campaign_service, get_campaign_by_id_service
@@ -27,7 +27,7 @@ async def test_campaign_creation():
 @pytest.mark.asyncio
 async def test_campaign_endpoints():
     """Test campaign API endpoints"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # First, create a test user and get auth token
         user_data = {
             "email": "campaigntest@example.com",
@@ -100,7 +100,7 @@ async def test_campaign_endpoints():
 @pytest.mark.asyncio
 async def test_campaign_unauthorized_access():
     """Test campaign endpoints without authentication"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app, lifespan="on"), base_url="http://test") as ac:
         # Test without auth headers
         response = await ac.get("/api/v1/campaigns/")
         assert response.status_code == 401
@@ -111,7 +111,7 @@ async def test_campaign_unauthorized_access():
 @pytest.mark.asyncio
 async def test_campaign_validation():
     """Test campaign data validation"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app, lifespan="on"), base_url="http://test") as ac:
         # Create test user and get token
         user_data = {
             "email": "validationtest@example.com",
@@ -144,3 +144,4 @@ async def test_campaign_validation():
         response = await ac.post("/api/v1/campaigns/", json=invalid_campaign, headers=headers)
         # Should return validation error
         assert response.status_code in [400, 422]
+

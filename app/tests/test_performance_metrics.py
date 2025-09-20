@@ -1,5 +1,5 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.services.performance_service import PerformanceService
 from app.models import PerformanceMetric
@@ -176,7 +176,7 @@ async def test_health_description():
 @pytest.mark.asyncio
 async def test_performance_endpoints():
     """Test performance metrics API endpoints"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app, lifespan="on"), base_url="http://test") as ac:
         # Create test user and get auth token
         user_data = {
             "email": "performancetest@example.com",
@@ -233,10 +233,11 @@ async def test_performance_endpoints():
 @pytest.mark.asyncio
 async def test_performance_endpoints_unauthorized():
     """Test performance endpoints without authentication"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Test without auth headers
         response = await ac.get("/api/v1/metrics/campaigns/test-campaign")
         assert response.status_code == 401
         
         response = await ac.post("/api/v1/metrics/performance", json={})
         assert response.status_code == 401
+

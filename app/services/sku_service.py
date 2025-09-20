@@ -1,6 +1,6 @@
 from app.models import SKU
 from fastapi.encoders import jsonable_encoder
-from app.db.sku_queries import create_sku,get_sku_list,get_sku_by_id,update_sku
+from app.db.sku_queries import create_sku, get_sku_list, get_sku_by_id, update_sku
 
 async def create_sku_service(sku: SKU):
     sku_dict = jsonable_encoder(sku)
@@ -15,24 +15,24 @@ async def create_sku_service(sku: SKU):
     except Exception as e:
         return {"success": False, "message": str(e)}
 
-async def get_sku_list_service():
+async def get_sku_list_service(client_id: str | None = None):
     try:
-      skus = await get_sku_list()
+      skus = await get_sku_list(client_id)
       return skus
     except Exception as e:
       return {"success": False, "message": str(e)}
 
-async def get_sku_by_id_service(sku_id: str):
+async def get_sku_by_id_service(sku_id: str, client_id: str | None = None):
     try:
-      sku = await get_sku_by_id(sku_id)
+      sku = await get_sku_by_id(sku_id, client_id)
       return sku
     except Exception as e:
       return None
 
-async def update_sku_service(sku_id: str, sku: SKU):
+async def update_sku_service(sku_id: str, sku: SKU, client_id: str | None = None):
     sku_dict = jsonable_encoder(sku)
     try:
-        result = await update_sku(sku_id, sku_dict)
+        result = await update_sku(sku_id, sku_dict, client_id)
         if result:
             return {"success": True,
                     "message":"SKU Updated Successfully",
