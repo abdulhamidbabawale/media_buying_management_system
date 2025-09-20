@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Dict, Literal
 from datetime import datetime
 from bson import ObjectId
 from uuid import UUID, uuid4
@@ -7,11 +7,12 @@ from uuid import UUID, uuid4
 # ------------------ Users ------------------
 class User(BaseModel):
     id: UUID = Field(default_factory=uuid4, alias="_id")
+    client_id: Optional[str] = ""
     email: str
     password: str
     first_name: str
     last_name: str
-    role: str  # admin, manager, analyst, etc.
+    role: str  # admin, manager, analyst,client etc.
     permissions: Optional[List[str]] = []
     status: str  # active, suspended, pending
     last_login: Optional[datetime] = None
@@ -43,7 +44,7 @@ class SKU(BaseModel):
     category: str
     total_budget: float
     remaining_budget: float
-    status: str  # active, paused, completed
+    status: Literal["active", "paused", "completed"]
     created_date: datetime = Field(default_factory=datetime.now)
     intelligence_settings: Optional[Dict] = {}
 
@@ -56,9 +57,9 @@ class Campaign(BaseModel):
     id: UUID = Field(default_factory=uuid4, alias="_id")
     sku_id: str
     client_id: str
-    platform: str  # google, meta, tiktok
+    platform: Literal["google_ads", "meta_ads", "tiktok_ads", "linkedin_ads"]
     campaign_name: str
-    status: str  # active, paused, completed
+    status: Literal["active", "paused", "completed"]
     budget_allocated: float
     target_groups: List[Dict] = []
     creatives: List[Dict] = []
