@@ -261,8 +261,8 @@ class PerformanceService:
         """Get human-readable health status description"""
         descriptions = {
             "optimal": "Spending at optimal pace - on track to meet budget goals",
-            "under_pace": "Spending below target pace - consider increasing budget allocation",
-            "over_pace": "Spending above target pace - monitor closely for budget depletion",
+            "under_pace": "under target pace - consider increasing budget allocation",
+            "over_pace": "over target pace - monitor closely for budget depletion",
             "critical_overspend": "Critical overspend detected - immediate action required",
             "budget_exhausted": "Budget has been fully utilized"
         }

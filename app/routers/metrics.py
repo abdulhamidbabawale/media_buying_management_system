@@ -17,7 +17,7 @@ async def create_performance_metric(
 ):
     """Create a new performance metric record"""
     # Verify client access
-    await verify_client_access(client_id, metric.client_id)
+    await verify_client_access(client_id, metric.client_id, request)
     
     result = await performance_service.create_performance_metric_service(metric)
     if result.get("success"):
@@ -71,7 +71,7 @@ async def get_client_performance(
 ):
     """Get aggregated performance metrics for a client"""
     # Verify client access
-    await verify_client_access(current_client_id, client_id)
+    await verify_client_access(current_client_id, client_id, request)
     
     result = await performance_service.get_client_performance(client_id, days)
     if result.get("success"):
@@ -160,3 +160,4 @@ async def get_budget_forecast(
         }
     else:
         raise HTTPException(status_code=404, detail=result["message"])
+
