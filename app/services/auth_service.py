@@ -23,8 +23,16 @@ async def login_user(form_data: LoginRequest):
     if not user or not verify_password(form_data.password, user["password"]):
         return {"success": False, "message": "Invalid credentials"}
 
-    access_token = create_access_token({"sub": user["email"], "user_id": str(user["_id"])})
-    refresh_token = create_refresh_token({"sub": user["email"], "user_id": str(user["_id"])})
+    # Include client_id in token for multi-tenant isolation
+    client_id = str(user.get("client_id")) if user.get("client_id") is not None else ""
+    token_payload = {
+        "sub": user["email"],
+        "user_id": str(user["_id"]),
+        "client_id": client_id,
+        "role": user.get("role", "client"),
+    }
+    access_token = create_access_token(token_payload)
+    refresh_token = create_refresh_token(token_payload)
     
     return {
         "success": True, 
@@ -48,7 +56,9 @@ async def refresh_access_token(refresh_token: str):
         # Create new access token
         new_access_token = create_access_token({
             "sub": payload["sub"], 
-            "user_id": payload["user_id"]
+            "user_id": payload["user_id"],
+            "client_id": payload.get("client_id", ""),
+            "role": payload.get("role", "client"),
         })
         
         return {
