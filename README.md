@@ -21,11 +21,11 @@ A centralized API-only intelligent media buying management system that manages a
 - **System-wide learning** with anonymized benchmarks
 
 ### Platform Integrations
-- **Google Ads API** connector with full campaign management
-- **Meta Marketing API** connector with performance tracking
-- **Integration middleware** for API orchestration and fallback strategies
-- **Data normalization** across platforms
-- **Rate limiting** and error handling
+- **Google Ads, Meta, TikTok, LinkedIn connectors** for campaign CRUD and metrics
+- **Media buying integrators**: Revealbot, AdRoll, StackAdapt, AdEspresso, Madgicx
+- **Integration middleware** for orchestration with automatic fallback to direct platform APIs
+- **Data normalization + persistence** for vendor/platform metrics (raw + normalized snapshots)
+- **Rate limiting, retries, error handling**
 
 ### Campaign Management
 - **Full CRUD operations** for campaigns, SKUs, and clients
@@ -33,6 +33,13 @@ A centralized API-only intelligent media buying management system that manages a
 - **Budget allocation** and optimization
 - **Performance metrics** aggregation and analysis
 - **Burn rate calculations** and forecasting
+
+### Brief Feature Summary
+- Multi-tenant FastAPI with JWT auth, role-aware admin bypass, and strict `client_id` isolation
+- Connectors for Google/Meta/TikTok/LinkedIn and integrators (Revealbot/AdRoll/StackAdapt/AdEspresso/Madgicx)
+- Orchestrated budget overrides with fallback to direct APIs
+- Aggregated, normalized performance metrics saved to MongoDB for analytics
+- SKU intelligence layer (explore/exploit) with decision logging
 
 ## 🏗️ System Architecture
 
@@ -79,6 +86,8 @@ A centralized API-only intelligent media buying management system that manages a
 - **performance_metrics** - Hourly performance snapshots
 - **intelligence_decisions** - Decision logging for analysis
 - **system_benchmarks** - Anonymized cross-client learning
+ - **integration_metrics_raw** - Raw payloads from integrators/platforms for auditing
+ - **integration_metrics** - Normalized metrics (spend, impressions, clicks, conversions, ctr, cpc, roas, cpm)
 
 ## 🚀 Installation & Setup
 
@@ -168,6 +177,91 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `POST /api/v1/integrations/campaigns/create` - Create campaign via middleware
 - `GET /api/v1/integrations/campaigns/{id}/performance` - Get performance data
 
+#### Integrator Endpoints
+- `GET /api/v1/integrations/integrators/available` - List registered integrators
+- `POST /api/v1/integrations/integrators/initialize` - Initialize integrators (Revealbot/AdRoll/StackAdapt/AdEspresso/Madgicx)
+- `POST /api/v1/integrations/campaigns/{id}/pause` - Pause via middleware (integrator first, fallback to platform)
+
+## 🧩 Using Integrations
+
+All integration endpoints require a valid JWT access token. Admins can operate across clients (per middleware rules); client users are restricted to their `client_id`.
+
+### 1) Initialize Integrators
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/integrations/integrators/initialize \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credentials": {
+      "revealbot": {"api_key": "RB_API_KEY"},
+      "adroll": {"access_token": "ADROLL_TOKEN"},
+      "stackadapt": {"api_key": "SA_API_KEY"},
+      "adespresso": {"api_key": "AE_API_KEY"},
+      "madgicx": {"api_key": "MG_API_KEY"}
+    }
+  }'
+```
+
+### 2) Initialize Platforms
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/integrations/platforms/initialize \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "google_ads": {"client_id":"...","client_secret":"...","refresh_token":"..."},
+    "meta_ads": {"access_token":"...","ad_account_id":"..."},
+    "tiktok_ads": {"access_token":"..."},
+    "linkedin_ads": {"access_token":"..."}
+  }'
+```
+
+### 3) Update Campaign Budget (Orchestrated)
+```bash
+curl -X PUT \
+  http://localhost:8000/api/v1/integrations/campaigns/budget \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campaign_id": "1234567890",
+    "new_budget": 250.0,
+    "platform": "google_ads",
+    "account_id": "acct_1"
+  }'
+```
+
+Flow: middleware tries the first available integrator (e.g., Revealbot). If it fails, it falls back to the direct platform connector (e.g., Google Ads). The response includes the `source` field indicating which path succeeded.
+
+### 4) Create Campaign (Orchestrated)
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/integrations/campaigns/create \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campaign_data": {"name":"Spring Sale","daily_budget":100.0},
+    "platform": "meta_ads",
+    "account_id": "act_123"
+  }'
+```
+
+### 5) Pause Campaign (Orchestrated)
+```bash
+curl -X POST \
+  "http://localhost:8000/api/v1/integrations/campaigns/123456/pause?platform=meta_ads&account_id=act_123" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 6) Get Aggregated Campaign Performance
+```bash
+curl -X GET \
+  "http://localhost:8000/api/v1/integrations/campaigns/123456/performance?platform=google_ads&account_id=acct_1&days=7" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Behind the scenes, the middleware fetches from integrators and the direct platform, normalizes each payload, persists both raw and normalized snapshots (`integration_metrics_raw`, `integration_metrics`), and returns aggregated totals plus derived metrics (`avg_roas`, `avg_ctr`, `avg_cpc`).
+
 ### System Health
 - `GET /` - Root endpoint
 - `GET /api/v1/health` - Health check with database and Redis status
@@ -256,19 +350,20 @@ docker-compose -f docker-compose.development.yaml up --build
 - `DATABASE_URI` - MongoDB connection string
 - `REDIS_HOST` - Redis host
 - `JWT_SECRET_KEY` - JWT signing key
+ - Optional per-vendor credentials via env/Secret Manager (recommended in production)
 
 ## 📋 Development Roadmap
 
 ### Completed (Step 1 - Foundation)
 - ✅ Multi-tenant API with JWT authentication
-- ✅ Google Ads + Meta Marketing integration
+- ✅ Google Ads + Meta + TikTok + LinkedIn connectors
 - ✅ Basic campaign budget allocation
 - ✅ Burn rate calculation and API access
 - ✅ Comprehensive test coverage (>80%)
 
 ### Next Steps
-- 🔄 TikTok Ads API integration
-- 🔄 Revealbot and AdRoll integrator connections
+- 🔄 Vendor-specific normalization refinements and extended metrics
+- 🔄 E2E tests for integrator fallbacks and error handling
 - 🔄 System-wide benchmark creation
 - 🔄 Advanced A/B testing framework
 - 🔄 Portfolio Theory optimization
