@@ -21,6 +21,10 @@ class CampaignCreationRequest(BaseModel):
     platform: str
     account_id: str
 
+class IntegratorCredentials(BaseModel):
+    # keys: revealbot, adroll, stackadapt, adespresso, madgicx
+    credentials: Dict[str, Dict]
+
 @router.post("/platforms/initialize")
 async def initialize_platforms(
     credentials: Dict[str, Dict],
@@ -73,6 +77,18 @@ async def get_available_integrators(
         "message": "Available integrators retrieved successfully",
         "data": integrators
     }
+
+@router.post("/integrators/initialize")
+async def initialize_integrators(
+    payload: IntegratorCredentials,
+    request: Request,
+    client_id: str = Depends(get_current_client_id)
+):
+    """Initialize media buying integrators"""
+    result = await integration_service.initialize_integrators(payload.credentials)
+    if result["success"]:
+        return {"message": "Integrators initialized", "results": result["results"]}
+    raise HTTPException(status_code=400, detail=result.get("message", "Initialization failed"))
 
 @router.post("/platforms/validate")
 async def validate_platform_credentials(
