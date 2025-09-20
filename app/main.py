@@ -1,4 +1,4 @@
-from fastapi import FastAPI,Depends,status
+from fastapi import FastAPI,Depends,status, Request
 from app.routers import clients,auth,skus,campaigns,metrics,integrations
 from app.middleware import MultiTenantMiddleware, LoggingMiddleware
 from fastapi_limiter import FastAPILimiter
@@ -42,6 +42,38 @@ async def startup():
 
     r = redis.Redis(host=redis_host, port=redis_port, db=0, decode_responses=True)
     await FastAPILimiter.init(r)
+
+    # Ensure MongoDB indexes exist
+    try:
+        from app.db.connection import db
+        # Clients
+        await db.clients.create_index("_id", unique=True)
+        await db.clients.create_index("name")
+
+        # SKUs
+        await db.skus.create_index("_id", unique=True)
+        await db.skus.create_index("client_id")
+        await db.skus.create_index("status")
+
+        # Campaigns
+        await db.campaigns.create_index("_id", unique=True)
+        await db.campaigns.create_index("client_id")
+        await db.campaigns.create_index("sku_id")
+        await db.campaigns.create_index("platform")
+        await db.campaigns.create_index("status")
+
+        # Performance metrics
+        await db.performance_metrics.create_index("campaign_id")
+        await db.performance_metrics.create_index("sku_id")
+        await db.performance_metrics.create_index("client_id")
+        await db.performance_metrics.create_index("timestamp")
+
+        # Integration metrics (new)
+        await db.integration_metrics_raw.create_index([("campaign_id", 1), ("vendor", 1), ("start", 1), ("end", 1)])
+        await db.integration_metrics.create_index([("campaign_id", 1), ("platform", 1), ("start", 1), ("end", 1)])
+    except Exception:
+        # Index creation failures should not crash startup, but will be visible in logs
+        pass
 
 @app.on_event("shutdown")
 async def shutdown():
