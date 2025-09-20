@@ -17,9 +17,16 @@ class SKUIntelligence:
     
     def __init__(self, config: Dict = None):
         self.config = config or MVP_CONFIG
-        self.performance_collection = db.performance_metrics
-        self.decisions_collection = db.intelligence_decisions
+        # Defer Motor collection access to runtime to avoid binding to a closed loop in tests
         
+    @property
+    def performance_collection(self):
+        return db.performance_metrics
+
+    @property
+    def decisions_collection(self):
+        return db.intelligence_decisions
+
     async def make_hourly_decisions(self, sku_id: str) -> Dict:
         """Main decision-making process for a SKU"""
         try:
@@ -261,7 +268,7 @@ class SKUIntelligence:
                 }
             ]
             
-            results = await self.performance_collection.aggregate(pipeline).to_list(1000)
+            results = await db.performance_metrics.aggregate(pipeline).to_list(1000)
             
             # Calculate aggregated metrics
             total_spend = sum(r["total_spend"] for r in results)
@@ -291,6 +298,7 @@ class SKUIntelligence:
             return {
                 "total_impressions": total_impressions,
                 "total_spend": total_spend,
+                "total_conversions": total_conversions,
                 "avg_roas": avg_roas,
                 "confidence_score": confidence_score,
                 "days_running": days_running,
@@ -324,7 +332,7 @@ class SKUIntelligence:
                 "confidence_score": 0.8  # Simplified confidence score
             }
             
-            await self.decisions_collection.insert_one(decision_log)
+            await db.intelligence_decisions.insert_one(decision_log)
             
         except Exception as e:
             logger.error(f"Error logging decisions for {sku_id}: {e}")
@@ -368,3 +376,4 @@ class IntelligenceScheduler:
         """Stop the optimization process"""
         self.running = False
         logger.info("Stopping hourly intelligence optimization")
+
