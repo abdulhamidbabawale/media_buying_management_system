@@ -203,6 +203,47 @@ curl -X POST \
   }'
 ```
 
+#### AdRoll Initialization Examples
+
+- PAT (Personal Access Token) mode: uses `Authorization: Token <PAT>` and appends `?apikey=<CLIENT_ID>` to every request.
+
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/integrations/integrators/initialize \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credentials": {
+      "adroll": {
+        "auth_mode": "pat",
+        "pat_token": "YOUR_ADROLL_PAT",
+        "client_id": "YOUR_ADROLL_APP_CLIENT_ID",
+        "base_url": "https://services.adroll.com",
+        "budget_level": "strategy"
+      }
+    }
+  }'
+```
+
+- OAuth 2.0 mode: uses `Authorization: Bearer <access_token>` (no `apikey` required).
+
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/integrations/integrators/initialize \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credentials": {
+      "adroll": {
+        "auth_mode": "oauth",
+        "access_token": "YOUR_ADROLL_OAUTH_ACCESS_TOKEN",
+        "base_url": "https://services.adroll.com",
+        "budget_level": "strategy"
+      }
+    }
+  }'
+```
+
 ### 2) Initialize Platforms
 ```bash
 curl -X POST \

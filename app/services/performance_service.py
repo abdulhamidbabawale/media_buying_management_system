@@ -16,6 +16,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import math
+
+def safe_float(value, default=None):
+    try:
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (TypeError, ValueError):
+        return default
+
 class PerformanceService:
     """Service for performance metrics and burn rate calculations"""
     
@@ -172,31 +183,47 @@ class PerformanceService:
                 "success": True,
                 "data": {
                     "sku_id": sku_id,
+                    # "burn_rates": {
+                    #     "hourly_burn": hourly_burn,
+                    #     "daily_burn": daily_burn,
+                    #     "weekly_burn": weekly_burn
+                    # },
+                    # "pacing_analysis": {
+                    #     "target_daily_pace": target_daily_pace,
+                    #     "actual_vs_target_pace": actual_vs_target_pace,
+                    #     "pace_variance_percentage": pace_variance
+                    # },
+                    # "budget_status": {
+                    #     "total_budget": total_budget,
+                    #     "remaining_budget": remaining_budget,
+                    #     "total_spent": total_spent,
+                    #     "budget_utilization_percentage": budget_utilization
+                    # },
+                    # "forecasting": {
+                    #     "days_until_budget_depletion": days_until_budget_depletion,
+                    #     "projected_month_end_spend": projected_month_end_spend,
+                    #     "recommended_daily_adjustment": recommended_daily_adjustment
+                    # },
+                    # "health_status": {
+                    #     "budget_health": budget_health,
+                    #     "status_description": self._get_health_description(budget_health)
+                    # }
                     "burn_rates": {
-                        "hourly_burn": hourly_burn,
-                        "daily_burn": daily_burn,
-                        "weekly_burn": weekly_burn
-                    },
+                         "hourly_burn": safe_float(hourly_burn, 0),
+                         "daily_burn": safe_float(daily_burn, 0),
+                         "weekly_burn": safe_float(weekly_burn, 0),
+                     },
                     "pacing_analysis": {
-                        "target_daily_pace": target_daily_pace,
-                        "actual_vs_target_pace": actual_vs_target_pace,
-                        "pace_variance_percentage": pace_variance
-                    },
+                         "target_daily_pace": safe_float(target_daily_pace),
+                         "actual_vs_target_pace": safe_float(actual_vs_target_pace),
+                         "pace_variance_percentage": safe_float(pace_variance),
+                     },
                     "budget_status": {
-                        "total_budget": total_budget,
-                        "remaining_budget": remaining_budget,
-                        "total_spent": total_spent,
-                        "budget_utilization_percentage": budget_utilization
-                    },
-                    "forecasting": {
-                        "days_until_budget_depletion": days_until_budget_depletion,
-                        "projected_month_end_spend": projected_month_end_spend,
-                        "recommended_daily_adjustment": recommended_daily_adjustment
-                    },
-                    "health_status": {
-                        "budget_health": budget_health,
-                        "status_description": self._get_health_description(budget_health)
-                    }
+                         "total_budget": safe_float(total_budget),
+                         "remaining_budget": safe_float(remaining_budget),
+                         "total_spent": safe_float(total_spent),
+                         "budget_utilization_percentage": safe_float(budget_utilization),
+                     },
                 }
             }
         except Exception as e:

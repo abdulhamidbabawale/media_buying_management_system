@@ -336,6 +336,9 @@ class IntegrationMiddleware:
                                               account_id: str) -> Dict:
         """Try campaign creation via integrator"""
         for integrator_name, integrator in self.integrators.items():
+            # Only attempt with the integrator that matches the requested platform
+            if integrator_name != platform:
+                continue
             try:
                 if hasattr(integrator, 'create_campaign'):
                     campaign_id = await integrator.create_campaign(campaign_data)

@@ -9,7 +9,6 @@ from app.integrations.meta_ads import MetaAdsConnector
 from app.integrations.tiktok_ads import TikTokAdsConnector
 from app.integrations.linkedin_ads import LinkedInAdsConnector
 from app.integrations.integrators import (
-    RevealBotConnector,
     AdRollConnector,
     StackAdaptConnector,
     AdEspressoConnector,
@@ -17,6 +16,7 @@ from app.integrations.integrators import (
 )
 from app.integrations.base import AdPlatform
 import logging
+from app.db.connection import db
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class IntegrationService:
     def __init__(self):
         self.middleware = integration_middleware
         self.initialized = False
+        self.connections_collection = db.integration_connections
     
     async def initialize_platforms(self, client_credentials: Dict[str, Dict]) -> Dict:
         """Initialize platform connectors for a client"""
@@ -77,6 +78,11 @@ class IntegrationService:
                     results["linkedin_ads"] = {"success": False, "message": "Invalid LinkedIn Ads credentials"}
 
             self.initialized = True
+            # Persist the last known platform credentials for automatic rehydration
+            try:
+                await self._save_platforms_config(client_credentials)
+            except Exception as e:
+                logger.warning(f"Failed to persist platform configs: {e}")
             return {
                 "success": True,
                 "message": "Platform initialization completed",
@@ -199,10 +205,6 @@ class IntegrationService:
         """Initialize media buying integrators"""
         results = {}
         try:
-            if "revealbot" in integrator_credentials:
-                rb = RevealBotConnector(integrator_credentials["revealbot"])
-                self.middleware.register_integrator("revealbot", rb)
-                results["revealbot"] = {"success": True}
 
             if "adroll" in integrator_credentials:
                 ar = AdRollConnector(integrator_credentials["adroll"])
@@ -224,9 +226,54 @@ class IntegrationService:
                 self.middleware.register_integrator("madgicx", mg)
                 results["madgicx"] = {"success": True}
 
+            # Persist the last known integrator credentials for automatic rehydration
+            try:
+                await self._save_integrators_config(integrator_credentials)
+            except Exception as e:
+                logger.warning(f"Failed to persist integrator configs: {e}")
+
             return {"success": True, "results": results}
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+    async def _save_platforms_config(self, creds: Dict[str, Dict]):
+        """Persist platform credentials (non-sensitive recommended) for rehydration."""
+        await self.connections_collection.update_one(
+            {"doc_type": "platforms"},
+            {"$set": {
+                "doc_type": "platforms",
+                "credentials": creds,
+                "updated_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+
+    async def _save_integrators_config(self, creds: Dict[str, Dict]):
+        """Persist integrator credentials (non-sensitive recommended) for rehydration."""
+        await self.connections_collection.update_one(
+            {"doc_type": "integrators"},
+            {"$set": {
+                "doc_type": "integrators",
+                "credentials": creds,
+                "updated_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+
+    async def load_persisted_configs(self):
+        """Load and re-register previously saved connectors on startup."""
+        try:
+            platforms_doc = await self.connections_collection.find_one({"doc_type": "platforms"})
+            if platforms_doc and platforms_doc.get("credentials"):
+                await self.initialize_platforms(platforms_doc["credentials"])  # re-register
+        except Exception as e:
+            logger.warning(f"Failed to load persisted platforms: {e}")
+        try:
+            integrators_doc = await self.connections_collection.find_one({"doc_type": "integrators"})
+            if integrators_doc and integrators_doc.get("credentials"):
+                await self.initialize_integrators(integrators_doc["credentials"])  # re-register
+        except Exception as e:
+            logger.warning(f"Failed to load persisted integrators: {e}")
     
     async def validate_platform_credentials(self, platform: str, credentials: Dict) -> Dict:
         """Validate platform credentials"""

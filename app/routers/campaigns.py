@@ -5,7 +5,12 @@ from app.schemas.campaign_schema import (
     CampaignCreateRequest, CampaignUpdateRequest, CampaignListResponse,
     CampaignCreateResponse, BudgetUpdateRequest
 )
-from app.middleware import get_current_client_id, verify_client_access
+from app.middleware import (
+    get_current_client_id,
+    get_current_client_id_optional,
+    get_current_user_role,
+    verify_client_access,
+)
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
 
@@ -40,46 +45,48 @@ async def create_campaign(
     else:
         raise HTTPException(status_code=400, detail=f"Error creating campaign: {result['message']}")
 
-@router.get("/", response_model=CampaignListResponse)
+@router.get("/", response_model=dict)
 async def get_campaigns(
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
-    """Get all campaigns for the current client"""
-    campaigns = await campaign_service.get_campaigns_by_client_service(client_id)
-    if campaigns:
-        return {
-            "message": "Campaigns retrieved successfully",
-            "data": campaigns
-        }
+    """Get campaigns: admin sees all, clients see their own"""
+    if role == "admin":
+        campaigns = await campaign_service.get_all_campaigns_service()
     else:
-        raise HTTPException(status_code=404, detail="No campaigns found")
+        if not current_client_id:
+            raise HTTPException(status_code=401, detail="Client context not found")
+        campaigns = await campaign_service.get_campaigns_by_client_service(current_client_id)
+    return {
+        "message": "Campaigns retrieved successfully",
+        "data": campaigns or []
+    }
 
 @router.get("/{campaign_id}")
 async def get_campaign(
     campaign_id: str,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
-    """Get campaign by ID"""
+    """Get campaign by ID (admin bypasses client check)"""
     campaign = await campaign_service.get_campaign_by_id_service(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Verify client access
-    await verify_client_access(client_id, campaign["client_id"], request)
-    
-    return {
-        "message": "Campaign retrieved successfully",
-        "data": campaign
-    }
+    if role != "admin":
+        if not current_client_id:
+            raise HTTPException(status_code=401, detail="Client context not found")
+        await verify_client_access(current_client_id, campaign["client_id"], request)
+    return {"message": "Campaign retrieved successfully", "data": campaign}
 
 @router.put("/{campaign_id}")
 async def update_campaign(
     campaign_id: str,
     campaign_update: CampaignUpdateRequest,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
     """Update campaign"""
     # Get existing campaign to verify client access
@@ -87,22 +94,13 @@ async def update_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"], request)
+    if role != "admin":
+        if not current_client_id:
+            raise HTTPException(status_code=401, detail="Client context not found")
+        await verify_client_access(current_client_id, existing_campaign["client_id"], request)
     
-    # Create updated campaign model
-    campaign_model = Campaign(
-        sku_id=existing_campaign["sku_id"],
-        client_id=existing_campaign["client_id"],
-        platform=existing_campaign["platform"],
-        campaign_name=campaign_update.campaign_name or existing_campaign["campaign_name"],
-        budget_allocated=campaign_update.budget_allocated or existing_campaign["budget_allocated"],
-        target_groups=campaign_update.target_groups or existing_campaign["target_groups"],
-        creatives=campaign_update.creatives or existing_campaign["creatives"],
-        status=existing_campaign["status"],
-        performance_metrics=campaign_update.performance_metrics or existing_campaign.get("performance_metrics", {})
-    )
     
-    result = await campaign_service.update_campaign_service(campaign_id, campaign_model)
+    result = await campaign_service.update_campaign_service(campaign_id, campaign_update)
     if result.get("success"):
         return {
             "message": result["message"]
@@ -114,7 +112,8 @@ async def update_campaign(
 async def delete_campaign(
     campaign_id: str,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
     """Delete campaign (soft delete)"""
     # Get existing campaign to verify client access
@@ -122,7 +121,10 @@ async def delete_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"], request)
+    if role != "admin":
+        if not current_client_id:
+            raise HTTPException(status_code=401, detail="Client context not found")
+        await verify_client_access(current_client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.delete_campaign_service(campaign_id)
     if result.get("success"):
@@ -136,7 +138,8 @@ async def delete_campaign(
 async def pause_campaign(
     campaign_id: str,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
     """Pause campaign"""
     # Get existing campaign to verify client access
@@ -144,7 +147,7 @@ async def pause_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"], request)
+    await verify_client_access(current_client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.pause_campaign_service(campaign_id)
     if result.get("success"):
@@ -158,7 +161,8 @@ async def pause_campaign(
 async def activate_campaign(
     campaign_id: str,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
     """Activate campaign"""
     # Get existing campaign to verify client access
@@ -166,7 +170,7 @@ async def activate_campaign(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"], request)
+    await verify_client_access(current_client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.activate_campaign_service(campaign_id)
     if result.get("success"):
@@ -181,7 +185,8 @@ async def update_campaign_budget(
     campaign_id: str,
     budget_update: BudgetUpdateRequest,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
     """Update campaign budget"""
     # Get existing campaign to verify client access
@@ -189,7 +194,7 @@ async def update_campaign_budget(
     if not existing_campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    await verify_client_access(client_id, existing_campaign["client_id"], request)
+    await verify_client_access(current_client_id, existing_campaign["client_id"], request)
     
     result = await campaign_service.update_campaign_budget_service(campaign_id, budget_update.new_budget)
     if result.get("success"):
@@ -203,16 +208,16 @@ async def update_campaign_budget(
 async def get_campaigns_by_sku(
     sku_id: str,
     request: Request,
-    client_id: str = Depends(get_current_client_id)
+    role: str = Depends(get_current_user_role),
+    current_client_id = Depends(get_current_client_id_optional)
 ):
-    """Get all campaigns for a specific SKU"""
+    """Get all campaigns for a specific SKU (admin sees all)"""
     campaigns = await campaign_service.get_campaigns_by_sku_service(sku_id)
-    if campaigns:
-        # Filter campaigns by client access
-        filtered_campaigns = [c for c in campaigns if c["client_id"] == client_id]
-        return {
-            "message": "Campaigns retrieved successfully",
-            "data": filtered_campaigns
-        }
-    else:
+    if not campaigns:
         raise HTTPException(status_code=404, detail="No campaigns found for this SKU")
+    if role == "admin":
+        return {"message": "Campaigns retrieved successfully", "data": campaigns}
+    if not current_client_id:
+        raise HTTPException(status_code=401, detail="Client context not found")
+    filtered_campaigns = [c for c in campaigns if c["client_id"] == current_client_id]
+    return {"message": "Campaigns retrieved successfully", "data": filtered_campaigns}

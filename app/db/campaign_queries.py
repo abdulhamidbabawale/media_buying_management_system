@@ -71,3 +71,7 @@ async def get_active_campaigns():
 async def get_campaigns_by_platform(platform: str):
     """Get campaigns by platform"""
     return await collection.find({"platform": platform}).to_list(1000)
+
+async def get_all_campaigns():
+    """Get all campaigns (admin use)."""
+    return await collection.find({}).to_list(1000)

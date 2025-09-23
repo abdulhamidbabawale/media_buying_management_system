@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from app.services.integration_service import integration_service
 from app.middleware import get_current_client_id, verify_client_access
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
@@ -19,7 +19,7 @@ class CampaignBudgetUpdate(BaseModel):
 class CampaignCreationRequest(BaseModel):
     campaign_data: Dict
     platform: str
-    account_id: str
+    account_id: Optional[str] = ""
 
 class IntegratorCredentials(BaseModel):
     # keys: revealbot, adroll, stackadapt, adespresso, madgicx

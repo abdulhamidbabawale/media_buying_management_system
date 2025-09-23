@@ -4,7 +4,7 @@ from app.db.campaign_queries import (
     create_campaign, get_campaign_by_id, get_campaigns_by_client,
     get_campaigns_by_sku, update_campaign, delete_campaign,
     pause_campaign, activate_campaign, update_campaign_budget,
-    get_active_campaigns, get_campaigns_by_platform
+    get_active_campaigns, get_campaigns_by_platform, get_all_campaigns
 )
 
 async def create_campaign_service(campaign: Campaign):
@@ -35,6 +35,14 @@ async def get_campaigns_by_client_service(client_id: str):
     """Get all campaigns for a specific client"""
     try:
         campaigns = await get_campaigns_by_client(client_id)
+        return campaigns
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+async def get_all_campaigns_service():
+    """Get all campaigns (admin)."""
+    try:
+        campaigns = await get_all_campaigns()
         return campaigns
     except Exception as e:
         return {"success": False, "message": str(e)}

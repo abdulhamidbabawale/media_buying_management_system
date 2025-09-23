@@ -3,6 +3,7 @@ from app.services.performance_service import PerformanceService
 from app.middleware import get_current_client_id, verify_client_access
 from app.models import PerformanceMetric
 from typing import Optional
+from fastapi.encoders import jsonable_encoder
 
 router = APIRouter(prefix="/metrics", tags=["Performance Metrics"])
 
@@ -90,10 +91,11 @@ async def get_burn_rate_analysis(
 ):
     """Get comprehensive burn rate and pacing analysis for a SKU"""
     result = await performance_service.calculate_burn_rate_metrics(sku_id)
+    burnrate = jsonable_encoder(result["data"])
     if result.get("success"):
         return {
             "message": "Burn rate analysis completed successfully",
-            "data": result["data"]
+            "data": burnrate
         }
     else:
         raise HTTPException(status_code=404, detail=result["message"])
@@ -132,32 +134,5 @@ async def get_mode_breakdown(
     else:
         raise HTTPException(status_code=404, detail=result["message"])
 
-@router.get("/forecasts/{sku_id}")
-async def get_budget_forecast(
-    sku_id: str,
-    request: Request = None,
-    client_id: str = Depends(get_current_client_id)
-):
-    """Get budget forecasting and recommendations for a SKU"""
-    # This endpoint reuses burn rate analysis which includes forecasting
-    result = await performance_service.calculate_burn_rate_metrics(sku_id)
-    if result.get("success"):
-        # Extract forecasting data
-        forecast_data = result["data"]["forecasting"]
-        health_data = result["data"]["health_status"]
-        
-        return {
-            "message": "Budget forecast generated successfully",
-            "data": {
-                "sku_id": sku_id,
-                "forecast": forecast_data,
-                "recommendations": {
-                    "daily_adjustment": forecast_data["recommended_daily_adjustment"],
-                    "health_status": health_data["budget_health"],
-                    "action_required": health_data["budget_health"] in ["critical_overspend", "budget_exhausted"]
-                }
-            }
-        }
-    else:
-        raise HTTPException(status_code=404, detail=result["message"])
+
 
