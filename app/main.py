@@ -1,5 +1,5 @@
 from fastapi import FastAPI,Depends,status, Request
-from app.routers import clients,auth,skus,campaigns,metrics,integrations
+from app.routers import clients,auth,skus,campaigns,metrics,integrations,google_ads_integrator
 from app.middleware import MultiTenantMiddleware, LoggingMiddleware
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
@@ -27,6 +27,7 @@ app.include_router(skus.router, prefix="/api/v1")
 app.include_router(campaigns.router, prefix="/api/v1")
 app.include_router(metrics.router, prefix="/api/v1")
 app.include_router(integrations.router, prefix="/api/v1")
+app.include_router(google_ads_integrator.router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def startup():
