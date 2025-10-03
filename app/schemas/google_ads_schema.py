@@ -1,10 +1,10 @@
 from pydantic import BaseModel,Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional,Literal
 from datetime import datetime
+from uuid import UUID, uuid4
 
+#for creating campaign
 class CampaignRequest(BaseModel):
-    user_id: str
-    customer_id: str
     budget_micros: int
     campaign_type: str
     name: str
@@ -42,7 +42,8 @@ class Budget(BaseModel):
     currency_code: str
 
 class Campaign(BaseModel):
-    user_id: str
+    id: str = Field(alias="_id")
+    client_id: str
     google_customer_id: str
     campaign_id: str
     campaign_name: str
@@ -51,3 +52,15 @@ class Campaign(BaseModel):
     channel: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     ad_groups: List[AdGroup] = []
+
+class GoogleCampaignListResponse(BaseModel):
+    message:str
+    data: List[Campaign] = []
+
+class GoogleGetCampaignResponse(BaseModel):
+    message:str
+    data: Campaign  
+
+class CampaignStatusUpdate(BaseModel):
+    campaign_id: str
+    new_status: Literal["ENABLED", "PAUSED", "REMOVED"] = Field(..., description="New status of the campaign") 

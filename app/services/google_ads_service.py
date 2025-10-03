@@ -1,7 +1,9 @@
 from google.ads.googleads.client import GoogleAdsClient
+from google.protobuf.field_mask_pb2 import FieldMask
 from google.ads.googleads.errors import GoogleAdsException
 from app.schemas.google_ads_schema import Campaign, AdGroup, Ad, Keyword, Budget, CampaignRequest
-from app.db.google_ads_queries import get_user_config,save_campaign_to_db
+from app.db.google_ads_queries import get_user_config,save_campaign_to_db,get_campaigns_for_user, get_campaign_by_id
+from typing import Dict, Any
 import datetime
 import uuid
 import os
@@ -11,8 +13,8 @@ CLIENT_SECRET = os.getenv("GOOGLE_ADS_CLIENT_SECRET")
 DEVELOPER_TOKEN = os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN")
 LOGIN_CUSTOMER_ID = os.getenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID")
 
-async def get_google_ads_client(user_id: str) -> GoogleAdsClient:
-    user_config =await get_user_config(user_id)
+async def get_google_ads_client(client_id: str) -> GoogleAdsClient:
+    user_config =await get_user_config(client_id)
     return GoogleAdsClient.load_from_dict(
         {
             "developer_token": DEVELOPER_TOKEN,
@@ -22,7 +24,7 @@ async def get_google_ads_client(user_id: str) -> GoogleAdsClient:
             "login_customer_id": LOGIN_CUSTOMER_ID,
             "use_proto_plus": True,
         },
-        version="v21",
+        version="v21", 
     )
 
 class CampaignService:
@@ -149,6 +151,35 @@ class CampaignService:
 
         return {"ad_id": response.results[0].resource_name}
 
+    def update_campaign_status(self, customer_id: str, campaign_id: str, status: str):
+        """
+        Update the status of a campaign.
+        status can be one of: 'ENABLED', 'PAUSED', 'REMOVED'
+        """
+        try:
+            campaign_service = self.client.get_service("CampaignService")
+            campaign_op = self.client.get_type("CampaignOperation")
+
+            # Resource name must be in the form: customers/{customer_id}/campaigns/{campaign_id}
+            campaign_resource_name = f"customers/{customer_id}/campaigns/{campaign_id}"
+
+            campaign = campaign_op.update
+            campaign.resource_name = campaign_resource_name
+            campaign.status = getattr(self.client.enums.CampaignStatusEnum, status.upper())
+
+            campaign_op.update_mask.CopyFrom(
+                FieldMask(paths=["status"])
+            )
+
+            response = campaign_service.mutate_campaigns(
+                customer_id=customer_id, operations=[campaign_op]
+            )
+
+            return {"message": f"Campaign {campaign_id} updated to {status}", "resource_name": response.results[0].resource_name}
+
+        except GoogleAdsException as ex:
+            return {"error": str(ex)}    
+
 
 class MetricsService:
     def __init__(self, user_config: dict):
@@ -171,21 +202,6 @@ class MetricsService:
                 start_date = (datetime.date.today() - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
 
             ga_service = self.client.get_service("GoogleAdsService")
-
-            # query = f"""
-            #     SELECT
-            #         campaign.id,
-            #         campaign.name,
-            #         metrics.impressions,
-            #         metrics.clicks,
-            #         metrics.ctr,
-            #         metrics.average_cpc,
-            #         metrics.cost_micros,
-            #         metrics.conversions
-            #     FROM campaign
-            #     WHERE campaign.id = {campaign_id}
-            #     DURING {start_date.replace("-", "")}, {end_date.replace("-", "")}
-            # """
 
             query = f"""
                    SELECT
@@ -223,25 +239,29 @@ class MetricsService:
             return {"error": str(ex)}
 
 
-async def create_google_ads_campaign(req: CampaignRequest):
-    user_config = await get_google_ads_client(req.user_id)
+async def create_google_ads_campaign(req: CampaignRequest,current_client_id):
+    user_config = await get_google_ads_client(current_client_id)
+    user_config_from_db =await get_user_config(current_client_id)
+    customer_id=user_config_from_db["customer_id"]
     service = CampaignService(user_config)
 
     # Step 1: Create campaign
     campaign_result = service.create_campaign(
-        customer_id=req.customer_id,
+        customer_id=customer_id,
         budget_micros=req.budget_micros,
         campaign_type=req.campaign_type,
         name=req.name,
-    )
+    ) 
     if "error" in campaign_result:
         return {"error": campaign_result["error"]}
 
     campaign_id = campaign_result["campaign_id"]
+    #just the campaign id
+    campaign_id_number = campaign_id.split("/")[-1]
 
     # Step 2: Create ad group
     ad_group_result = service.create_ad_group(
-        customer_id=req.customer_id,
+        customer_id=customer_id,
         campaign_id=campaign_id,
         name=req.ad_group_name,
     )
@@ -251,7 +271,7 @@ async def create_google_ads_campaign(req: CampaignRequest):
     keyword_objs = []
     for kw in req.keywords:
         keyword_result = service.add_keyword(
-            customer_id=req.customer_id,
+            customer_id=customer_id,
             ad_group_id=ad_group_id,
             keyword_text=kw,
             match_type="EXACT",
@@ -267,7 +287,7 @@ async def create_google_ads_campaign(req: CampaignRequest):
 
     # Step 4: Create ad
     ad_result = service.create_responsive_search_ad(
-        customer_id=req.customer_id,
+        customer_id=customer_id,
         ad_group_id=ad_group_id,
         headlines=req.headlines,
         descriptions=req.descriptions,
@@ -294,8 +314,9 @@ async def create_google_ads_campaign(req: CampaignRequest):
 
     # Build campaign object
     campaign_obj = Campaign(
-        user_id=req.user_id,
-        google_customer_id=req.customer_id,
+        _id=campaign_id_number,
+        client_id=current_client_id,
+        google_customer_id=customer_id,
         campaign_id=campaign_id,
         campaign_name=req.name,
         status="PAUSED",
@@ -305,6 +326,18 @@ async def create_google_ads_campaign(req: CampaignRequest):
         ad_groups=[ad_group_obj],
     )
 
+    service.update_campaign_status(customer_id,campaign_id_number,'ENABLED')
+
     return {"campaign_obj": campaign_obj, "campaign_id": campaign_id, "ad_group_id": ad_group_id, "ad_id": ad_result["ad_id"], "keywords": [kw.keyword_text for kw in keyword_objs]}
 
-# =======================
+async def fetch_campaigns(client_id: str) -> list[Dict[str, Any]]:
+    campaigns = await get_campaigns_for_user(client_id)
+    return campaigns
+
+async def fetch_campaign_by_id(user_id: str, campaign_id: str):
+    campaign = await get_campaign_by_id(campaign_id, user_id)
+    if not campaign:
+        return None
+    
+    return campaign
+

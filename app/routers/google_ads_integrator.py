@@ -4,12 +4,19 @@ import requests
 import os
 from app.db.connection import db 
 from app.db.google_ads_queries import get_user_config
-from app.services.google_ads_service import CampaignService,MetricsService,get_google_ads_client,create_google_ads_campaign
+from app.services.google_ads_service import ( 
+     CampaignService,
+     MetricsService,
+     get_google_ads_client,
+     create_google_ads_campaign,
+     fetch_campaigns,
+     fetch_campaign_by_id
+    )
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Literal
+from typing import Optional, List, Dict, Literal,Any
 import urllib.parse
-from app.schemas.google_ads_schema import CampaignRequest
-from app.db.google_ads_queries import save_campaign_to_db
+from app.schemas.google_ads_schema import CampaignRequest,GoogleCampaignListResponse,GoogleGetCampaignResponse,CampaignStatusUpdate
+from app.db.google_ads_queries import save_campaign_to_db,update_campaign_status_in_db
 from app.middleware import (
     get_current_client_id,
     get_current_client_id_optional,
@@ -115,14 +122,14 @@ def google_ads_callback(code: str = Query(...), state: str = Query(...)):
 
 
 @router.post("/campaigns/create")
-async def create_campaign(req: CampaignRequest):
-    result = await create_google_ads_campaign(req)
+async def create_campaign(req: CampaignRequest,current_client_id = Depends(get_current_client_id_optional)):
+    result = await create_google_ads_campaign(req,current_client_id)
 
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
 
     # Save to DB
-    save_campaign_to_db(result["campaign_obj"])
+    await save_campaign_to_db(result["campaign_obj"])
 
     return {
         "message": "Campaign created and saved successfully",
@@ -134,8 +141,7 @@ async def create_campaign(req: CampaignRequest):
 
 @router.get("/campaigns/metrics")
 async def get_campaign_metrics(
-    user_id: str = Query(...),
-    customer_id: str = Query(...),
+    client_id: str = Depends(get_current_client_id_optional),
     campaign_id: str = Query(...),
     start_date: Optional[str] = Query(None, description="Start date in YYYY-MM-DD format"),
     end_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
@@ -144,17 +150,47 @@ async def get_campaign_metrics(
     Fetch metrics for a specific campaign
     """
     # Fetch user's Google Ads auth details from MongoDB
-    user_config =await get_google_ads_client(user_id)
+    google_config =await get_user_config(client_id)
+    user_config =await get_google_ads_client(client_id)
 
     if not user_config:
         return {"error": "User config not found"}
 
     service = MetricsService(user_config)
     return service.get_campaign_metrics(
-        customer_id=customer_id,
+        customer_id= google_config["customer_id"],
         campaign_id=campaign_id,
         start_date=start_date,
         end_date=end_date,
     )
 
 
+@router.get("/campaigns", response_model=GoogleCampaignListResponse)
+async def get_user_campaigns(user_id: str = Depends(get_current_client_id_optional)):
+    campaigns = await fetch_campaigns(user_id)
+    return {"message":"Camaigns retrieved successfully","data":campaigns}
+
+@router.get("/campaigns/{campaign_id}", response_model=GoogleGetCampaignResponse)
+async def get_campaign_metrics(campaign_id: str, user_id: str = Depends(get_current_client_id_optional)):
+    campaign = await fetch_campaign_by_id(user_id, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return {"message":"Campaign retrieved successfully","data":campaign}
+
+@router.put("/campaigns/status", response_model=dict)
+async def update_campaign_status( req:CampaignStatusUpdate, client_id: str = Depends(get_current_client_id_optional)):
+    google_config =await get_user_config(client_id)
+    user_config =await get_google_ads_client(client_id)
+
+    service = CampaignService(user_config)
+
+    customer_id= google_config["customer_id"] 
+
+    # update the actual status on google ads
+    updated_google_campaign=service.update_campaign_status(customer_id,req.campaign_id,req.new_status.upper())
+    if updated_google_campaign:
+       # update it in the mongo db table
+       await update_campaign_status_in_db(req.campaign_id,req.new_status.upper())
+    else:
+        raise HTTPException(status_code=400, detail="failed to update")
+    return {"message":"Campaign updated successfully"}
